@@ -11,7 +11,13 @@ from flask_cors import CORS
 import base64
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000","https://rail-web.vercel.app"])
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000", "https://rail-web.vercel.app"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # Queue to store detection results
 detection_queue = queue.Queue(maxsize=10)
@@ -140,9 +146,16 @@ def update_object_tracking(objects):
     for object_name in expired_objects:
         del object_tracking[object_name]
 
-@app.route('/api/detect', methods=['GET', 'POST'])
+@app.route('/api/detect', methods=['GET', 'POST', 'OPTIONS'])
 def handle_detections():
     """Handle both GET and POST requests for detections"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        return response
+    
     if request.method == 'POST':
         # Process frame from client
         data = request.json
@@ -161,25 +174,40 @@ def handle_detections():
                 "objects": objects
             })
         
-        return jsonify({
+        response = jsonify({
             "timestamp": time.time(),
             "objects": objects
         })
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
     
     else:  # GET request
         if not detection_queue.empty():
             latest = detection_queue.get()
-            return jsonify(latest)
+            response = jsonify(latest)
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response
         else:
-            return jsonify({"timestamp": time.time(), "objects": []})
+            response = jsonify({"timestamp": time.time(), "objects": []})
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response
 
-@app.route('/api/alerts', methods=['GET'])
+@app.route('/api/alerts', methods=['GET', 'OPTIONS'])
 def get_alerts():
     """Return all alerts"""
-    return jsonify({
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        return response
+    
+    response = jsonify({
         "timestamp": time.time(),
         "alerts": all_alerts
     })
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
 
 # Initialize the detector
 detector = ObjectDetection()
